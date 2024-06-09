@@ -131,6 +131,8 @@ class UpdatesManager final : public Actor {
 
   void ping_server();
 
+  void notify_speed_limited(bool is_upload);
+
   bool running_get_difference() const {
     return running_get_difference_;
   }
@@ -280,6 +282,8 @@ class UpdatesManager final : public Actor {
   };
   FlatHashMap<uint64, SessionInfo> session_infos_;
 
+  double next_notify_speed_limited_[2] = {0.0, 0.0};
+
   void start_up() final;
 
   void tear_down() final;
@@ -380,7 +384,7 @@ class UpdatesManager final : public Actor {
 
   static void fill_get_difference_gap(void *td);
 
-  static void fill_gap(void *td, const char *source);
+  static void fill_gap(void *td, const string &source);
 
   void repair_pts_gap();
 
@@ -665,7 +669,13 @@ class UpdatesManager final : public Actor {
 
   void on_update(tl_object_ptr<telegram_api::updateBotDeleteBusinessMessage> update, Promise<Unit> &&promise);
 
+  void on_update(tl_object_ptr<telegram_api::updateBroadcastRevenueTransactions> update, Promise<Unit> &&promise);
+
+  void on_update(tl_object_ptr<telegram_api::updateStarsBalance> update, Promise<Unit> &&promise);
+
   // unsupported updates
+
+  void on_update(tl_object_ptr<telegram_api::updateNewStoryReaction> update, Promise<Unit> &&promise);
 };
 
 }  // namespace td

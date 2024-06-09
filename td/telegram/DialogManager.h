@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -72,7 +72,12 @@ class DialogManager final : public Actor {
   tl_object_ptr<telegram_api::inputEncryptedChat> get_input_encrypted_chat(DialogId dialog_id,
                                                                            AccessRights access_rights) const;
 
-  bool have_input_peer(DialogId dialog_id, AccessRights access_rights) const;
+  Status check_dialog_access(DialogId dialog_id, bool allow_secret_chats, AccessRights access_rights,
+                             const char *source) const;
+
+  Status check_dialog_access_in_memory(DialogId dialog_id, bool allow_secret_chats, AccessRights access_rights) const;
+
+  bool have_input_peer(DialogId dialog_id, bool allow_secret_chats, AccessRights access_rights) const;
 
   bool have_dialog_force(DialogId dialog_id, const char *source) const;
 

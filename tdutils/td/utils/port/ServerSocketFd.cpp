@@ -317,60 +317,6 @@ bool ServerSocketFd::empty() const {
   return !impl_;
 }
 
-Result<ServerSocketFd> ServerSocketFd::open(int32 port, CSlice addr) {
-  if (port <= 0 || port >= (1 << 16)) {
-    return Status::Error(PSLICE() << "Invalid server port " << port << " specified");
-  }
-
-  TRY_RESULT(address, IPAddress::get_ip_address(addr));
-  address.set_port(port);
-
-  NativeFd fd{socket(address.get_address_family(), SOCK_STREAM, 0)};
-  if (!fd) {
-    return OS_SOCKET_ERROR("Failed to create a socket");
-  }
-
-  TRY_STATUS(fd.set_is_blocking_unsafe(false));
-  auto sock = fd.socket();
-
-  linger ling = {0, 0};
-#if TD_PORT_POSIX
-  int flags = 1;
-#ifdef SO_REUSEPORT
-  setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, reinterpret_cast<const char *>(&flags), sizeof(flags));
-#endif
-#elif TD_PORT_WINDOWS
-  BOOL flags = FALSE;
-  if (address.is_ipv6()) {
-    setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char *>(&flags), sizeof(flags));
-  }
-  flags = TRUE;
-#endif
-  setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&flags), sizeof(flags));
-  setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, reinterpret_cast<const char *>(&flags), sizeof(flags));
-  setsockopt(sock, SOL_SOCKET, SO_LINGER, reinterpret_cast<const char *>(&ling), sizeof(ling));
-  setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&flags), sizeof(flags));
-
-  int e_bind = bind(sock, address.get_sockaddr(), static_cast<socklen_t>(address.get_sockaddr_len()));
-  if (e_bind != 0) {
-    return OS_SOCKET_ERROR("Failed to bind a socket");
-  }
-
-  // TODO: magic constant
-  int e_listen = listen(sock, 8192);
-  if (e_listen != 0) {
-    return OS_SOCKET_ERROR("Failed to listen on a socket");
-  }
-
-#if TD_PORT_POSIX
-  auto impl = make_unique<detail::ServerSocketFdImpl>(std::move(fd));
-#elif TD_PORT_WINDOWS
-  auto impl = make_unique<detail::ServerSocketFdImpl>(std::move(fd), address.get_address_family());
-#endif
-
-  return ServerSocketFd(std::move(impl));
-}
-
 Result<ServerSocketFd> ServerSocketFd::open(string path) {
   NativeFd fd{socket(AF_UNIX, SOCK_STREAM, 0)};
   if (!fd) {
@@ -415,6 +361,14 @@ Result<ServerSocketFd> ServerSocketFd::open(string path) {
 #endif
 
   return ServerSocketFd(std::move(impl));
+}
+
+Result<uint32> ServerSocketFd::maximize_snd_buffer(uint32 max_size) {
+  return get_native_fd().maximize_snd_buffer(max_size);
+}
+
+Result<uint32> ServerSocketFd::maximize_rcv_buffer(uint32 max_size) {
+  return get_native_fd().maximize_rcv_buffer(max_size);
 }
 
 }  // namespace td

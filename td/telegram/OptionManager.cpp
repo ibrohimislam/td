@@ -10,8 +10,8 @@
 #include "td/telegram/AnimationsManager.h"
 #include "td/telegram/AttachMenuManager.h"
 #include "td/telegram/AuthManager.h"
+#include "td/telegram/ChatManager.h"
 #include "td/telegram/ConfigManager.h"
-#include "td/telegram/ContactsManager.h"
 #include "td/telegram/CountryInfoManager.h"
 #include "td/telegram/DialogId.h"
 #include "td/telegram/GitCommitHash.h"
@@ -31,6 +31,7 @@
 #include "td/telegram/Td.h"
 #include "td/telegram/TdDb.h"
 #include "td/telegram/TopDialogManager.h"
+#include "td/telegram/UserManager.h"
 
 #include "td/db/KeyValueSyncInterface.h"
 #include "td/db/TsSeqKeyValue.h"
@@ -98,11 +99,11 @@ OptionManager::OptionManager(Td *td)
     }
   };
   set_default_integer_option("telegram_service_notifications_chat_id",
-                             DialogId(ContactsManager::get_service_notifications_user_id()).get());
-  set_default_integer_option("replies_bot_chat_id", DialogId(ContactsManager::get_replies_bot_user_id()).get());
-  set_default_integer_option("group_anonymous_bot_user_id", ContactsManager::get_anonymous_bot_user_id().get());
-  set_default_integer_option("channel_bot_user_id", ContactsManager::get_channel_bot_user_id().get());
-  set_default_integer_option("anti_spam_bot_user_id", ContactsManager::get_anti_spam_bot_user_id().get());
+                             DialogId(UserManager::get_service_notifications_user_id()).get());
+  set_default_integer_option("replies_bot_chat_id", DialogId(UserManager::get_replies_bot_user_id()).get());
+  set_default_integer_option("group_anonymous_bot_user_id", UserManager::get_anonymous_bot_user_id().get());
+  set_default_integer_option("channel_bot_user_id", UserManager::get_channel_bot_user_id().get());
+  set_default_integer_option("anti_spam_bot_user_id", UserManager::get_anti_spam_bot_user_id().get());
   set_default_integer_option("message_caption_length_max", 1024);
   set_default_integer_option("message_reply_quote_length_max", 1024);
   set_default_integer_option("story_caption_length_max", 200);
@@ -131,6 +132,7 @@ OptionManager::OptionManager(Td *td)
   set_default_integer_option("channel_custom_wallpaper_level_min", is_test_dc ? 4 : 10);
   set_default_integer_option("channel_emoji_status_level_min", is_test_dc ? 2 : 8);
   set_default_integer_option("channel_profile_bg_icon_level_min", is_test_dc ? 1 : 7);
+  set_default_integer_option("channel_restrict_sponsored_level_min", is_test_dc ? 5 : 50);
   set_default_integer_option("channel_wallpaper_level_min", is_test_dc ? 3 : 9);
   set_default_integer_option("pm_read_date_expire_period", 604800);
   set_default_integer_option("group_transcribe_level_min", is_test_dc ? 4 : 6);
@@ -141,14 +143,22 @@ OptionManager::OptionManager(Td *td)
   set_default_integer_option("group_custom_wallpaper_level_min", is_test_dc ? 4 : 10);
   set_default_integer_option("quick_reply_shortcut_count_max", is_test_dc ? 10 : 100);
   set_default_integer_option("quick_reply_shortcut_message_count_max", 20);
-  set_default_integer_option("business_intro_title_length_max", 32);
-  set_default_integer_option("business_intro_message_length_max", 70);
+  set_default_integer_option("business_start_page_title_length_max", 32);
+  set_default_integer_option("business_start_page_message_length_max", 70);
+  set_default_integer_option("premium_download_speedup", 10);
+  set_default_integer_option("premium_upload_speedup", 10);
+  set_default_integer_option("upload_premium_speedup_notify_period", 3600);
+  set_default_integer_option("business_chat_link_count_max", is_test_dc ? 5 : 100);
+  set_default_integer_option("pinned_story_count_max", 3);
+  set_default_integer_option("fact_check_length_max", 1024);
 
   if (options.isset("my_phone_number") || !options.isset("my_id")) {
     update_premium_options();
   }
 
   set_option_empty("archive_and_mute_new_chats_from_unknown_users");
+  set_option_empty("business_intro_title_length_max");
+  set_option_empty("business_intro_message_length_max");
   set_option_empty("channel_custom_accent_color_boost_level_min");
   set_option_empty("chat_filter_count_max");
   set_option_empty("chat_filter_chosen_chat_count_max");
@@ -351,6 +361,7 @@ bool OptionManager::is_internal_option(Slice name) {
                                                               "channel_custom_wallpaper_level_min",
                                                               "channel_emoji_status_level_min",
                                                               "channel_profile_bg_icon_level_min",
+                                                              "channel_restrict_sponsored_level_min",
                                                               "channel_wallpaper_level_min",
                                                               "channels_limit_default",
                                                               "channels_limit_premium",
@@ -376,6 +387,7 @@ bool OptionManager::is_internal_option(Slice name) {
                                                               "dialogs_pinned_limit_premium",
                                                               "dice_emojis",
                                                               "dice_success_values",
+                                                              "dismiss_birthday_contact_today",
                                                               "edit_time_limit",
                                                               "emoji_sounds",
                                                               "fragment_prefixes",
@@ -401,6 +413,7 @@ bool OptionManager::is_internal_option(Slice name) {
                                                               "premium_bot_username",
                                                               "premium_features",
                                                               "premium_invoice_slug",
+                                                              "premium_manage_subscription_url",
                                                               "rating_e_decay",
                                                               "reactions_uniq_max",
                                                               "reactions_user_max_default",
@@ -434,6 +447,7 @@ bool OptionManager::is_internal_option(Slice name) {
                                                               "story_caption_length_limit_premium",
                                                               "story_expiring_limit_default",
                                                               "story_expiring_limit_premium",
+                                                              "upload_premium_speedup_notify_period",
                                                               "video_note_size_max",
                                                               "webfile_dc_id"};
   return internal_options.count(name) > 0;
@@ -507,6 +521,9 @@ void OptionManager::on_option_updated(Slice name) {
       if (name == "disable_top_chats") {
         send_closure(td_->top_dialog_manager_actor_, &TopDialogManager::update_is_enabled, !get_option_boolean(name));
       }
+      if (name == "dismiss_birthday_contact_today") {
+        send_closure(td_->user_manager_actor_, &UserManager::reload_contact_birthdates, true);
+      }
       break;
     case 'e':
       if (name == "emoji_sounds") {
@@ -523,7 +540,8 @@ void OptionManager::on_option_updated(Slice name) {
       break;
     case 'i':
       if (name == "ignored_restriction_reasons") {
-        send_closure(td_->contacts_manager_actor_, &ContactsManager::on_ignored_restriction_reasons_changed);
+        send_closure(td_->chat_manager_actor_, &ChatManager::on_ignored_restriction_reasons_changed);
+        send_closure(td_->user_manager_actor_, &UserManager::on_ignored_restriction_reasons_changed);
       }
       if (name == "is_emulator") {
         if (G()->mtproto_header().set_is_emulator(get_option_boolean(name))) {
@@ -684,7 +702,7 @@ td_api::object_ptr<td_api::OptionValue> OptionManager::get_option_synchronously(
       break;
     case 'v':
       if (name == "version") {
-        return td_api::make_object<td_api::optionValueString>("1.8.27");
+        return td_api::make_object<td_api::optionValueString>("1.8.30");
       }
       break;
   }

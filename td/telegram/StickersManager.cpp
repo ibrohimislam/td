@@ -9,7 +9,6 @@
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/ConfigManager.h"
-#include "td/telegram/ContactsManager.h"
 #include "td/telegram/DialogId.h"
 #include "td/telegram/DialogManager.h"
 #include "td/telegram/Document.h"
@@ -38,6 +37,7 @@
 #include "td/telegram/td_api.h"
 #include "td/telegram/TdDb.h"
 #include "td/telegram/telegram_api.h"
+#include "td/telegram/UserManager.h"
 #include "td/telegram/Version.h"
 
 #include "td/db/SqliteKeyValue.h"
@@ -1463,6 +1463,9 @@ class GetEmojiGroupsQuery final : public Td::ResultHandler {
       case EmojiGroupType::ProfilePhoto:
         send_query(G()->net_query_creator().create(telegram_api::messages_getEmojiProfilePhotoGroups(hash)));
         break;
+      case EmojiGroupType::RegularStickers:
+        send_query(G()->net_query_creator().create(telegram_api::messages_getEmojiStickerGroups(hash)));
+        break;
       default:
         UNREACHABLE();
     }
@@ -1474,6 +1477,9 @@ class GetEmojiGroupsQuery final : public Td::ResultHandler {
                   "");
     static_assert(std::is_same<telegram_api::messages_getEmojiGroups::ReturnType,
                                telegram_api::messages_getEmojiProfilePhotoGroups::ReturnType>::value,
+                  "");
+    static_assert(std::is_same<telegram_api::messages_getEmojiGroups::ReturnType,
+                               telegram_api::messages_getEmojiStickerGroups::ReturnType>::value,
                   "");
     auto result_ptr = fetch_result<telegram_api::messages_getEmojiGroups>(packet);
     if (result_ptr.is_error()) {
@@ -2007,7 +2013,7 @@ void StickersManager::on_load_special_sticker_set(const SpecialStickerSetType &t
   it->second.foreach([&](const MessageFullId &message_full_id) { message_full_ids.push_back(message_full_id); });
   CHECK(!message_full_ids.empty());
   for (const auto &message_full_id : message_full_ids) {
-    td_->messages_manager_->on_external_update_message_content(message_full_id);
+    td_->messages_manager_->on_external_update_message_content(message_full_id, "on_load_special_sticker_set");
   }
 }
 
@@ -2019,6 +2025,12 @@ StickerType StickersManager::get_sticker_type(FileId file_id) const {
   const auto *sticker = get_sticker(file_id);
   CHECK(sticker != nullptr);
   return sticker->type_;
+}
+
+StickerFormat StickersManager::get_sticker_format(FileId file_id) const {
+  const auto *sticker = get_sticker(file_id);
+  CHECK(sticker != nullptr);
+  return sticker->format_;
 }
 
 bool StickersManager::is_premium_custom_emoji(CustomEmojiId custom_emoji_id, bool default_result) const {
@@ -4405,12 +4417,12 @@ vector<FileId> StickersManager::get_stickers(StickerType sticker_type, string qu
   if (sticker_type == StickerType::CustomEmoji) {
     switch (dialog_id.get_type()) {
       case DialogType::User:
-        if (dialog_id.get_user_id() == td_->contacts_manager_->get_my_id()) {
+        if (dialog_id.get_user_id() == td_->user_manager_->get_my_id()) {
           allow_premium = true;
         }
         break;
       case DialogType::SecretChat:
-        if (td_->contacts_manager_->get_secret_chat_layer(dialog_id.get_secret_chat_id()) <
+        if (td_->user_manager_->get_secret_chat_layer(dialog_id.get_secret_chat_id()) <
             static_cast<int32>(SecretChatLayer::SpoilerAndCustomEmojiEntities)) {
           promise.set_value(Unit());
           return {};
@@ -5745,7 +5757,7 @@ void StickersManager::try_update_animated_emoji_messages() {
     }
   }
   for (const auto &message_full_id : message_full_ids) {
-    td_->messages_manager_->on_external_update_message_content(message_full_id);
+    td_->messages_manager_->on_external_update_message_content(message_full_id, "try_update_animated_emoji_messages");
   }
 }
 
@@ -5763,7 +5775,7 @@ void StickersManager::try_update_custom_emoji_messages(CustomEmojiId custom_emoj
         [&](const MessageFullId &message_full_id) { message_full_ids.push_back(message_full_id); });
   }
   for (const auto &message_full_id : message_full_ids) {
-    td_->messages_manager_->on_external_update_message_content(message_full_id);
+    td_->messages_manager_->on_external_update_message_content(message_full_id, "try_update_custom_emoji_messages");
   }
 }
 
@@ -5780,7 +5792,7 @@ void StickersManager::try_update_premium_gift_messages() {
     }
   }
   for (const auto &message_full_id : message_full_ids) {
-    td_->messages_manager_->on_external_update_message_content(message_full_id);
+    td_->messages_manager_->on_external_update_message_content(message_full_id, "try_update_premium_gift_messages");
   }
 }
 
@@ -6922,7 +6934,7 @@ void StickersManager::schedule_update_animated_emoji_clicked(const StickerSet *s
     return;
   }
   auto dialog_id = message_full_id.get_dialog_id();
-  if (!td_->dialog_manager_->have_input_peer(dialog_id, AccessRights::Write)) {
+  if (!td_->dialog_manager_->have_input_peer(dialog_id, false, AccessRights::Write)) {
     return;
   }
 
@@ -6971,7 +6983,7 @@ void StickersManager::send_update_animated_emoji_clicked(MessageFullId message_f
     return;
   }
   auto dialog_id = message_full_id.get_dialog_id();
-  if (!td_->dialog_manager_->have_input_peer(dialog_id, AccessRights::Write)) {
+  if (!td_->dialog_manager_->have_input_peer(dialog_id, false, AccessRights::Write)) {
     return;
   }
 
@@ -7780,7 +7792,7 @@ Result<std::tuple<FileId, bool, bool>> StickersManager::prepare_input_sticker(td
     }
   }
 
-  return prepare_input_file(sticker->sticker_, get_sticker_format(sticker->format_), sticker_type, false);
+  return prepare_input_file(sticker->sticker_, ::td::get_sticker_format(sticker->format_), sticker_type, false);
 }
 
 Result<std::tuple<FileId, bool, bool>> StickersManager::prepare_input_file(
@@ -7845,10 +7857,10 @@ FileId StickersManager::upload_sticker_file(UserId user_id, StickerFormat sticke
                                             Promise<Unit> &&promise) {
   bool is_bot = td_->auth_manager_->is_bot();
   if (!is_bot) {
-    user_id = td_->contacts_manager_->get_my_id();
+    user_id = td_->user_manager_->get_my_id();
   }
 
-  auto r_input_user = td_->contacts_manager_->get_input_user(user_id);
+  auto r_input_user = td_->user_manager_->get_input_user(user_id);
   if (r_input_user.is_error()) {
     promise.set_error(r_input_user.move_as_error());
     return FileId();
@@ -7952,10 +7964,10 @@ void StickersManager::create_new_sticker_set(UserId user_id, string title, strin
                                              Promise<td_api::object_ptr<td_api::stickerSet>> &&promise) {
   bool is_bot = td_->auth_manager_->is_bot();
   if (!is_bot) {
-    user_id = td_->contacts_manager_->get_my_id();
+    user_id = td_->user_manager_->get_my_id();
   }
 
-  TRY_RESULT_PROMISE(promise, input_user, td_->contacts_manager_->get_input_user(user_id));
+  TRY_RESULT_PROMISE(promise, input_user, td_->user_manager_->get_input_user(user_id));
 
   title = strip_empty_characters(title, MAX_STICKER_SET_TITLE_LENGTH);
   if (title.empty()) {
@@ -8189,7 +8201,7 @@ void StickersManager::on_new_stickers_uploaded(int64 random_id, Result<Unit> res
   CHECK(pending_new_sticker_set->upload_files_multipromise_.promise_count() == 0);
 
   auto &promise = pending_new_sticker_set->promise_;
-  TRY_RESULT_PROMISE(promise, input_user, td_->contacts_manager_->get_input_user(pending_new_sticker_set->user_id_));
+  TRY_RESULT_PROMISE(promise, input_user, td_->user_manager_->get_input_user(pending_new_sticker_set->user_id_));
 
   StickerType sticker_type = pending_new_sticker_set->sticker_type_;
 
@@ -8224,10 +8236,10 @@ void StickersManager::add_sticker_to_set(UserId user_id, string short_name,
                                          td_api::object_ptr<td_api::InputFile> &&old_sticker, Promise<Unit> &&promise) {
   bool is_bot = td_->auth_manager_->is_bot();
   if (!is_bot) {
-    user_id = td_->contacts_manager_->get_my_id();
+    user_id = td_->user_manager_->get_my_id();
   }
 
-  TRY_RESULT_PROMISE(promise, input_user, td_->contacts_manager_->get_input_user(user_id));
+  TRY_RESULT_PROMISE(promise, input_user, td_->user_manager_->get_input_user(user_id));
 
   short_name = clean_username(strip_empty_characters(short_name, MAX_STICKER_SET_SHORT_NAME_LENGTH));
   if (short_name.empty()) {
@@ -8340,10 +8352,10 @@ void StickersManager::set_sticker_set_thumbnail(UserId user_id, string short_nam
                                                 Promise<Unit> &&promise) {
   bool is_bot = td_->auth_manager_->is_bot();
   if (!is_bot) {
-    user_id = td_->contacts_manager_->get_my_id();
+    user_id = td_->user_manager_->get_my_id();
   }
 
-  TRY_RESULT_PROMISE(promise, input_user, td_->contacts_manager_->get_input_user(user_id));
+  TRY_RESULT_PROMISE(promise, input_user, td_->user_manager_->get_input_user(user_id));
 
   short_name = clean_username(strip_empty_characters(short_name, MAX_STICKER_SET_SHORT_NAME_LENGTH));
   if (short_name.empty()) {

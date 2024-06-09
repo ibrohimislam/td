@@ -248,6 +248,7 @@
       <option>Ubuntu 18</option>
       <option>Ubuntu 20</option>
       <option>Ubuntu 22</option>
+      <option>Ubuntu 24</option>
       <option>Other</option>
     </select>
     <p></p>
@@ -472,6 +473,9 @@ function getTarget(language, os) {
     return 'WebAssembly';
   }
   if (os.includes('Android')) {
+    if (language === 'Dart') {
+      return 'AndroidJson';
+    }
     return 'Android';
   }
   if (os.includes('iOS') || os.includes('tvOS') || os.includes('visionOS') || os.includes('watchOS')) {
@@ -494,9 +498,10 @@ function getTargetName(target) {
     case 'tdjson':
     case 'WebAssembly':
     case 'iOS':
+    case 'AndroidJson':
       return '<a href="https://github.com/tdlib/td#using-json">JSON</a>';
     case 'tdclient':
-      return '<a href="https://github.com/tdlib/td#using-cxx">a simple and convenient C++11-interface</a>';
+      return '<a href="https://github.com/tdlib/td#using-cxx">simple and convenient C++11</a>';
     case 'JNI':
     case 'Android':
       return '<a href="https://github.com/tdlib/td#using-java">native ' + target + '</a>';
@@ -523,9 +528,9 @@ function onOsChanged() {
            'If you want to build it manually, take a look at our <a href="https://github.com/tdlib/td/tree/master/example/web">example</a>.';
     target = '';
   }
-  if (target === 'Android') {
-    text = 'TDLib for Android is available in a prebuilt form and can be downloaded from <a href="https://core.telegram.org/tdlib/tdlib.zip">there</a>.<br>' +
-           'See <a href="https://github.com/tdlib/td/issues/77#issuecomment-640719893">build instructions</a> if you want to build the latest TDLib version or want to build TDLib with different interface.';
+  if (target === 'Android' || target === 'AndroidJson') {
+    text = 'TDLib can be used from ' + language + ' on ' + os + ' through the ' + getTargetName(target) + ' interface.<br>' +
+           'See <a href="https://github.com/tdlib/td/blob/master/example/android">Android example</a> for the example of building TDLib for Android.<br>';
     target = '';
   }
   if (target === 'iOS') {
@@ -589,8 +594,8 @@ function onOptionsChanged() {
   var low_memory = false;
   if (os_linux || os_freebsd || os_netbsd) {
     low_memory = document.getElementById('buildLowMemoryCheckbox').checked;
-    document.getElementById('buildLowMemoryText').innerHTML = 'I have less than ' + (use_clang ? '1.5' : '3.5') +' GB of RAM.' +
-            (low_memory ? ' Now you will need only ' + (use_clang ? '0.5' : '1') +' GB of RAM to build TDLib.' : '');
+    document.getElementById('buildLowMemoryText').innerHTML = 'I have less than ' + (use_clang ? '2' : '4') +' GB of RAM.' +
+            (low_memory ? ' Now you will need only ' + (use_clang ? '0.8' : '1.5') +' GB of RAM to build TDLib.' : '');
     document.getElementById('buildLowMemoryDiv').style.display = 'block';
   } else {
     if (os_openbsd) {
@@ -641,7 +646,7 @@ function onOptionsChanged() {
   var use_vcpkg = os_windows;
 
   var use_lto = false;
-  if (!use_msvc && language !== 'Go' && language !== 'Java' && language !== 'Kotlin' && (os_mac || (os_linux && (linux_distro === 'Ubuntu 18' || linux_distro === 'Ubuntu 20' || linux_distro === 'Ubuntu 22' || linux_distro === 'Other')))) {
+  if (!use_msvc && language !== 'Go' && language !== 'Java' && language !== 'Kotlin' && (os_mac || (os_linux && (linux_distro === 'Ubuntu 18' || linux_distro === 'Ubuntu 20' || linux_distro === 'Ubuntu 22' || linux_distro === 'Ubuntu 24' || linux_distro === 'Other')))) {
     document.getElementById('buildLtoDiv').style.display = 'block';
     use_lto = document.getElementById('buildLtoCheckbox').checked;
   } else {
@@ -802,6 +807,19 @@ function onOptionsChanged() {
         return '-10';
       case 'Ubuntu 22':
         return '-14';
+      case 'Ubuntu 24':
+        return '-18';
+      default:
+        return ''; // use default version
+    }
+  }
+
+  function getLibcplusplusVersionSuffix() {
+    switch (linux_distro) {
+      case 'Ubuntu 20':
+      case 'Ubuntu 22':
+      case 'Ubuntu 24':
+        return getClangVersionSuffix();
       default:
         return ''; // use default version
     }
@@ -855,6 +873,7 @@ function onOptionsChanged() {
       case 'Ubuntu 18':
       case 'Ubuntu 20':
       case 'Ubuntu 22':
+      case 'Ubuntu 24':
         if (linux_distro.includes('Debian') && !use_root) {
           commands.push('su -');
         }
@@ -878,9 +897,9 @@ function onOptionsChanged() {
           packages += ' default-jdk';
         }
         if (use_clang) {
-          packages += ' clang' + getClangVersionSuffix() + ' libc++-dev';
-          if (linux_distro === 'Debian 10+' || linux_distro === 'Ubuntu 18' || linux_distro === 'Ubuntu 20' || linux_distro === 'Ubuntu 22') {
-            packages += ' libc++abi-dev';
+          packages += ' clang' + getClangVersionSuffix() + ' libc++' + getLibcplusplusVersionSuffix() + '-dev';
+          if (linux_distro === 'Debian 10+' || linux_distro === 'Ubuntu 18' || linux_distro === 'Ubuntu 20' || linux_distro === 'Ubuntu 22' || linux_distro === 'Ubuntu 24') {
+            packages += ' libc++abi' + getLibcplusplusVersionSuffix() + '-dev';
           }
         } else {
           packages += ' g++';

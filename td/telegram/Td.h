@@ -51,9 +51,9 @@ class BusinessManager;
 class CallManager;
 class CallbackQueriesManager;
 class ChannelRecommendationManager;
+class ChatManager;
 class CommonDialogManager;
 class ConfigManager;
-class ContactsManager;
 class CountryInfoManager;
 class DeviceTokenManager;
 class DialogActionManager;
@@ -68,6 +68,7 @@ class FileReferenceManager;
 class ForumTopicManager;
 class GameManager;
 class GroupCallManager;
+class InlineMessageManager;
 class InlineQueriesManager;
 class HashtagHints;
 class LanguagePackManager;
@@ -100,6 +101,7 @@ class TopDialogManager;
 class TranscriptionManager;
 class TranslationManager;
 class UpdatesManager;
+class UserManager;
 class VideoNotesManager;
 class VideosManager;
 class VoiceNotesManager;
@@ -187,10 +189,10 @@ class Td final : public Actor {
   ActorOwn<BusinessManager> business_manager_actor_;
   unique_ptr<ChannelRecommendationManager> channel_recommendation_manager_;
   ActorOwn<ChannelRecommendationManager> channel_recommendation_manager_actor_;
+  unique_ptr<ChatManager> chat_manager_;
+  ActorOwn<ChatManager> chat_manager_actor_;
   unique_ptr<CommonDialogManager> common_dialog_manager_;
   ActorOwn<CommonDialogManager> common_dialog_manager_actor_;
-  unique_ptr<ContactsManager> contacts_manager_;
-  ActorOwn<ContactsManager> contacts_manager_actor_;
   unique_ptr<CountryInfoManager> country_info_manager_;
   ActorOwn<CountryInfoManager> country_info_manager_actor_;
   unique_ptr<DialogActionManager> dialog_action_manager_;
@@ -215,6 +217,8 @@ class Td final : public Actor {
   ActorOwn<GameManager> game_manager_actor_;
   unique_ptr<GroupCallManager> group_call_manager_;
   ActorOwn<GroupCallManager> group_call_manager_actor_;
+  unique_ptr<InlineMessageManager> inline_message_manager_;
+  ActorOwn<InlineMessageManager> inline_message_manager_actor_;
   unique_ptr<InlineQueriesManager> inline_queries_manager_;
   ActorOwn<InlineQueriesManager> inline_queries_manager_actor_;
   unique_ptr<LinkManager> link_manager_;
@@ -233,6 +237,8 @@ class Td final : public Actor {
   ActorOwn<PrivacyManager> privacy_manager_actor_;
   unique_ptr<PeopleNearbyManager> people_nearby_manager_;
   ActorOwn<PeopleNearbyManager> people_nearby_manager_actor_;
+  unique_ptr<PhoneNumberManager> phone_number_manager_;
+  ActorOwn<PhoneNumberManager> phone_number_manager_actor_;
   unique_ptr<QuickReplyManager> quick_reply_manager_;
   ActorOwn<QuickReplyManager> quick_reply_manager_actor_;
   unique_ptr<ReactionManager> reaction_manager_;
@@ -259,6 +265,8 @@ class Td final : public Actor {
   ActorOwn<TranslationManager> translation_manager_actor_;
   unique_ptr<UpdatesManager> updates_manager_;
   ActorOwn<UpdatesManager> updates_manager_actor_;
+  unique_ptr<UserManager> user_manager_;
+  ActorOwn<UserManager> user_manager_actor_;
   unique_ptr<VideoNotesManager> video_notes_manager_;
   ActorOwn<VideoNotesManager> video_notes_manager_actor_;
   unique_ptr<VoiceNotesManager> voice_notes_manager_;
@@ -267,11 +275,11 @@ class Td final : public Actor {
   ActorOwn<WebPagesManager> web_pages_manager_actor_;
 
   ActorOwn<CallManager> call_manager_;
-  ActorOwn<PhoneNumberManager> change_phone_number_manager_;
+  ActorOwn<HashtagHints> cashtag_search_hints_;
   ActorOwn<ConfigManager> config_manager_;
-  ActorOwn<PhoneNumberManager> confirm_phone_number_manager_;
   ActorOwn<DeviceTokenManager> device_token_manager_;
   ActorOwn<HashtagHints> hashtag_hints_;
+  ActorOwn<HashtagHints> hashtag_search_hints_;
   ActorOwn<LanguagePackManager> language_pack_manager_;
   ActorOwn<NetStatsManager> net_stats_manager_;
   ActorOwn<PasswordManager> password_manager_;
@@ -279,7 +287,6 @@ class Td final : public Actor {
   ActorOwn<SecureManager> secure_manager_;
   ActorOwn<StateManager> state_manager_;
   ActorOwn<StorageManager> storage_manager_;
-  ActorOwn<PhoneNumberManager> verify_phone_number_manager_;
 
   class ResultHandler : public std::enable_shared_from_this<ResultHandler> {
    public:
@@ -419,9 +426,8 @@ class Td final : public Actor {
   void on_get_promo_data(Result<telegram_api::object_ptr<telegram_api::help_PromoData>> r_promo_data, bool dummy);
 
   template <class T>
-  friend class RequestActor;        // uses send_result/send_error
-  friend class AuthManager;         // uses send_result/send_error, TODO pass Promise<>
-  friend class PhoneNumberManager;  // uses send_result/send_error, TODO pass Promise<>
+  friend class RequestActor;  // uses send_result/send_error
+  friend class AuthManager;   // uses send_result/send_error, TODO pass Promise<>
 
   void add_handler(uint64 id, std::shared_ptr<ResultHandler> handler);
   std::shared_ptr<ResultHandler> extract_handler(uint64 id);
@@ -478,9 +484,11 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::sendAuthenticationFirebaseSms &request);
 
+  void on_request(uint64 id, td_api::reportAuthenticationCodeMissing &request);
+
   void on_request(uint64 id, td_api::setAuthenticationEmailAddress &request);
 
-  void on_request(uint64 id, const td_api::resendAuthenticationCode &request);
+  void on_request(uint64 id, td_api::resendAuthenticationCode &request);
 
   void on_request(uint64 id, td_api::checkAuthenticationEmailCode &request);
 
@@ -566,11 +574,15 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::deleteAccount &request);
 
-  void on_request(uint64 id, td_api::changePhoneNumber &request);
+  void on_request(uint64 id, td_api::sendPhoneNumberCode &request);
 
-  void on_request(uint64 id, td_api::checkChangePhoneNumberCode &request);
+  void on_request(uint64 id, td_api::sendPhoneNumberFirebaseSms &request);
 
-  void on_request(uint64 id, td_api::resendChangePhoneNumberCode &request);
+  void on_request(uint64 id, td_api::reportPhoneNumberCodeMissing &request);
+
+  void on_request(uint64 id, td_api::resendPhoneNumberCode &request);
+
+  void on_request(uint64 id, td_api::checkPhoneNumberCode &request);
 
   void on_request(uint64 id, const td_api::getUserLink &request);
 
@@ -682,6 +694,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::clearAutosaveSettingsExceptions &request);
 
+  void on_request(uint64 id, const td_api::getRecommendedChats &request);
+
   void on_request(uint64 id, const td_api::getChatSimilarChats &request);
 
   void on_request(uint64 id, const td_api::getChatSimilarChatCount &request);
@@ -784,6 +798,14 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::searchOutgoingDocumentMessages &request);
 
+  void on_request(uint64 id, td_api::searchPublicHashtagMessages &request);
+
+  void on_request(uint64 id, td_api::getSearchedForHashtags &request);
+
+  void on_request(uint64 id, td_api::removeSearchedForHashtag &request);
+
+  void on_request(uint64 id, td_api::clearSearchedForHashtags &request);
+
   void on_request(uint64 id, const td_api::deleteAllCallMessages &request);
 
   void on_request(uint64 id, const td_api::searchChatRecentLocationMessages &request);
@@ -821,6 +843,8 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::getSavedMessagesTags &request);
 
   void on_request(uint64 id, td_api::setSavedMessagesTagLabel &request);
+
+  void on_request(uint64 id, const td_api::getMessageEffect &request);
 
   void on_request(uint64 id, td_api::getMessagePublicForwards &request);
 
@@ -880,6 +904,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::editMessageSchedulingState &request);
 
+  void on_request(uint64 id, td_api::setMessageFactCheck &request);
+
   void on_request(uint64 id, td_api::sendBusinessMessage &request);
 
   void on_request(uint64 id, td_api::sendBusinessMessageAlbum &request);
@@ -896,6 +922,16 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::deleteQuickReplyShortcutMessages &request);
 
+  void on_request(uint64 id, td_api::addQuickReplyShortcutMessage &request);
+
+  void on_request(uint64 id, td_api::addQuickReplyShortcutInlineQueryResultMessage &request);
+
+  void on_request(uint64 id, td_api::addQuickReplyShortcutMessageAlbum &request);
+
+  void on_request(uint64 id, td_api::readdQuickReplyShortcutMessages &request);
+
+  void on_request(uint64 id, td_api::editQuickReplyMessage &request);
+
   void on_request(uint64 id, const td_api::getStory &request);
 
   void on_request(uint64 id, const td_api::getChatsToSendStories &request);
@@ -908,7 +944,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::setStoryPrivacySettings &request);
 
-  void on_request(uint64 id, const td_api::toggleStoryIsPinned &request);
+  void on_request(uint64 id, const td_api::toggleStoryIsPostedToChatPage &request);
 
   void on_request(uint64 id, const td_api::deleteStory &request);
 
@@ -1148,9 +1184,11 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getChatActiveStories &request);
 
-  void on_request(uint64 id, const td_api::getChatPinnedStories &request);
+  void on_request(uint64 id, const td_api::getChatPostedToChatPageStories &request);
 
   void on_request(uint64 id, const td_api::getChatArchivedStories &request);
+
+  void on_request(uint64 id, const td_api::setChatPinnedStories &request);
 
   void on_request(uint64 id, const td_api::openStory &request);
 
@@ -1302,6 +1340,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::searchFileDownloads &request);
 
+  void on_request(uint64 id, td_api::setApplicationVerificationToken &request);
+
   void on_request(uint64 id, td_api::getMessageFileType &request);
 
   void on_request(uint64 id, const td_api::getMessageImportConfirmationText &request);
@@ -1357,6 +1397,8 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::setPersonalChat &request);
 
   void on_request(uint64 id, const td_api::setEmojiStatus &request);
+
+  void on_request(uint64 id, const td_api::toggleHasSponsoredMessagesEnabled &request);
 
   void on_request(uint64 id, const td_api::getThemedEmojiStatuses &request);
 
@@ -1418,7 +1460,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::setBusinessAwayMessageSettings &request);
 
-  void on_request(uint64 id, td_api::setBusinessIntro &request);
+  void on_request(uint64 id, td_api::setBusinessStartPage &request);
 
   void on_request(uint64 id, td_api::setProfilePhoto &request);
 
@@ -1435,6 +1477,20 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::setBusinessConnectedBot &request);
 
   void on_request(uint64 id, const td_api::deleteBusinessConnectedBot &request);
+
+  void on_request(uint64 id, const td_api::toggleBusinessConnectedBotChatIsPaused &request);
+
+  void on_request(uint64 id, const td_api::removeBusinessConnectedBotFromChat &request);
+
+  void on_request(uint64 id, const td_api::getBusinessChatLinks &request);
+
+  void on_request(uint64 id, td_api::createBusinessChatLink &request);
+
+  void on_request(uint64 id, td_api::editBusinessChatLink &request);
+
+  void on_request(uint64 id, td_api::deleteBusinessChatLink &request);
+
+  void on_request(uint64 id, td_api::getBusinessChatLinkInfo &request);
 
   void on_request(uint64 id, td_api::setSupergroupUsername &request);
 
@@ -1458,6 +1514,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::toggleSupergroupIsAllHistoryAvailable &request);
 
+  void on_request(uint64 id, const td_api::toggleSupergroupCanHaveSponsoredMessages &request);
+
   void on_request(uint64 id, const td_api::toggleSupergroupHasHiddenMembers &request);
 
   void on_request(uint64 id, const td_api::toggleSupergroupHasAggressiveAntiSpamEnabled &request);
@@ -1479,6 +1537,8 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::getAllStickerEmojis &request);
 
   void on_request(uint64 id, td_api::searchStickers &request);
+
+  void on_request(uint64 id, const td_api::getGreetingStickers &request);
 
   void on_request(uint64 id, const td_api::getPremiumStickers &request);
 
@@ -1596,6 +1656,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::setScopeNotificationSettings &request);
 
+  void on_request(uint64 id, td_api::setReactionNotificationSettings &request);
+
   void on_request(uint64 id, const td_api::resetAllNotificationSettings &request);
 
   void on_request(uint64 id, const td_api::removeChatActionBar &request);
@@ -1607,6 +1669,12 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::reportMessageReactions &request);
 
   void on_request(uint64 id, const td_api::getChatStatistics &request);
+
+  void on_request(uint64 id, const td_api::getChatRevenueStatistics &request);
+
+  void on_request(uint64 id, const td_api::getChatRevenueWithdrawalUrl &request);
+
+  void on_request(uint64 id, const td_api::getChatRevenueTransactions &request);
 
   void on_request(uint64 id, const td_api::getMessageStatistics &request);
 
@@ -1645,6 +1713,8 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::stopPoll &request);
 
   void on_request(uint64 id, const td_api::hideSuggestedAction &request);
+
+  void on_request(uint64 id, const td_api::hideContactCloseBirthdays &request);
 
   void on_request(uint64 id, td_api::getBusinessConnection &request);
 
@@ -1700,6 +1770,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::createInvoiceLink &request);
 
+  void on_request(uint64 id, td_api::refundStarPayment &request);
+
   void on_request(uint64 id, td_api::getPassportElement &request);
 
   void on_request(uint64 id, td_api::getAllPassportElements &request);
@@ -1712,12 +1784,6 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::getPreferredCountryLanguage &request);
 
-  void on_request(uint64 id, td_api::sendPhoneNumberVerificationCode &request);
-
-  void on_request(uint64 id, const td_api::resendPhoneNumberVerificationCode &request);
-
-  void on_request(uint64 id, td_api::checkPhoneNumberVerificationCode &request);
-
   void on_request(uint64 id, td_api::sendEmailAddressVerificationCode &request);
 
   void on_request(uint64 id, const td_api::resendEmailAddressVerificationCode &request);
@@ -1729,12 +1795,6 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::getPassportAuthorizationFormAvailableElements &request);
 
   void on_request(uint64 id, td_api::sendPassportAuthorizationForm &request);
-
-  void on_request(uint64 id, td_api::sendPhoneNumberConfirmationCode &request);
-
-  void on_request(uint64 id, const td_api::resendPhoneNumberConfirmationCode &request);
-
-  void on_request(uint64 id, td_api::checkPhoneNumberConfirmationCode &request);
 
   void on_request(uint64 id, const td_api::getSupportUser &request);
 
@@ -1788,7 +1848,11 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getPremiumGiveawayInfo &request);
 
-  void on_request(uint64 id, td_api::canPurchasePremium &request);
+  void on_request(uint64 id, const td_api::getStarPaymentOptions &request);
+
+  void on_request(uint64 id, td_api::getStarTransactions &request);
+
+  void on_request(uint64 id, td_api::canPurchaseFromStore &request);
 
   void on_request(uint64 id, td_api::assignAppStoreTransaction &request);
 

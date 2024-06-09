@@ -40,9 +40,9 @@ class BoostManager;
 class BusinessConnectionManager;
 class BusinessManager;
 class CallManager;
+class ChatManager;
 class ConfigManager;
 class ConnectionCreator;
-class ContactsManager;
 class DialogActionManager;
 class DialogFilterManager;
 class DialogInviteLinkManager;
@@ -54,6 +54,7 @@ class FileReferenceManager;
 class ForumTopicManager;
 class GameManager;
 class GroupCallManager;
+class InlineMessageManager;
 class LanguagePackManager;
 class LinkManager;
 class MessageImportManager;
@@ -81,6 +82,7 @@ class TimeZoneManager;
 class TopDialogManager;
 class TranscriptionManager;
 class UpdatesManager;
+class UserManager;
 class WebPagesManager;
 
 class Global final : public ActorContext {
@@ -255,18 +257,18 @@ class Global final : public ActorContext {
     call_manager_ = call_manager;
   }
 
+  ActorId<ChatManager> chat_manager() const {
+    return chat_manager_;
+  }
+  void set_chat_manager(ActorId<ChatManager> chat_manager) {
+    chat_manager_ = chat_manager;
+  }
+
   ActorId<ConfigManager> config_manager() const {
     return config_manager_;
   }
   void set_config_manager(ActorId<ConfigManager> config_manager) {
     config_manager_ = config_manager;
-  }
-
-  ActorId<ContactsManager> contacts_manager() const {
-    return contacts_manager_;
-  }
-  void set_contacts_manager(ActorId<ContactsManager> contacts_manager) {
-    contacts_manager_ = contacts_manager;
   }
 
   ActorId<DialogActionManager> dialog_action_manager() const {
@@ -344,6 +346,13 @@ class Global final : public ActorContext {
   }
   void set_group_call_manager(ActorId<GroupCallManager> group_call_manager) {
     group_call_manager_ = group_call_manager;
+  }
+
+  ActorId<InlineMessageManager> inline_message_manager() const {
+    return inline_message_manager_;
+  }
+  void set_inline_message_manager(ActorId<InlineMessageManager> inline_message_manager) {
+    inline_message_manager_ = inline_message_manager;
   }
 
   ActorId<LanguagePackManager> language_pack_manager() const {
@@ -498,6 +507,13 @@ class Global final : public ActorContext {
     updates_manager_ = updates_manager;
   }
 
+  ActorId<UserManager> user_manager() const {
+    return user_manager_;
+  }
+  void set_user_manager(ActorId<UserManager> user_manager) {
+    user_manager_ = user_manager;
+  }
+
   ActorId<WebPagesManager> web_pages_manager() const {
     return web_pages_manager_;
   }
@@ -618,6 +634,8 @@ class Global final : public ActorContext {
     store_all_files_in_files_directory_ = flag;
   }
 
+  void notify_speed_limited(bool is_upload);
+
  private:
   std::shared_ptr<DhConfig> dh_config_;
 
@@ -634,8 +652,8 @@ class Global final : public ActorContext {
   ActorId<BusinessConnectionManager> business_connection_manager_;
   ActorId<BusinessManager> business_manager_;
   ActorId<CallManager> call_manager_;
+  ActorId<ChatManager> chat_manager_;
   ActorId<ConfigManager> config_manager_;
-  ActorId<ContactsManager> contacts_manager_;
   ActorId<DialogActionManager> dialog_action_manager_;
   ActorId<DialogFilterManager> dialog_filter_manager_;
   ActorId<DialogInviteLinkManager> dialog_invite_link_manager_;
@@ -647,6 +665,7 @@ class Global final : public ActorContext {
   ActorId<ForumTopicManager> forum_topic_manager_;
   ActorId<GameManager> game_manager_;
   ActorId<GroupCallManager> group_call_manager_;
+  ActorId<InlineMessageManager> inline_message_manager_;
   ActorId<LanguagePackManager> language_pack_manager_;
   ActorId<LinkManager> link_manager_;
   ActorId<MessageImportManager> message_import_manager_;
@@ -668,6 +687,7 @@ class Global final : public ActorContext {
   ActorId<TopDialogManager> top_dialog_manager_;
   ActorId<TranscriptionManager> transcription_manager_;
   ActorId<UpdatesManager> updates_manager_;
+  ActorId<UserManager> user_manager_;
   ActorId<WebPagesManager> web_pages_manager_;
   ActorOwn<ConnectionCreator> connection_creator_;
   ActorOwn<TempAuthKeyWatchdog> temp_auth_key_watchdog_;
