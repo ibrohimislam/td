@@ -21,8 +21,10 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 #endif
 
@@ -384,6 +386,47 @@ Result<uint32> ServerSocketFd::maximize_snd_buffer(uint32 max_size) {
 
 Result<uint32> ServerSocketFd::maximize_rcv_buffer(uint32 max_size) {
   return get_native_fd().maximize_rcv_buffer(max_size);
+}
+
+Result<ServerSocketFd> ServerSocketFd::open(string path) {
+  NativeFd fd{socket(AF_UNIX, SOCK_STREAM, 0)};
+  if (!fd) {
+    return OS_SOCKET_ERROR("Failed to create a socket");
+  }
+
+  TRY_STATUS(fd.set_is_blocking_unsafe(false));
+  auto sock = fd.socket();
+
+  int flags = 1;
+  setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, reinterpret_cast<const char *>(&flags), sizeof(flags));
+  setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&flags), sizeof(flags));
+
+  #define UNIX_PATH_MAX 108
+  struct sockaddr_un server_addr = { .sun_family = AF_UNIX };
+  memset(server_addr.sun_path, 0, UNIX_PATH_MAX);
+  strcpy(server_addr.sun_path, path.c_str());
+
+  int e_bind = bind(sock, (struct sockaddr *) &server_addr, sizeof(server_addr));
+  if (e_bind != 0) {
+    return OS_SOCKET_ERROR("Failed to bind a socket");
+  }
+
+  int e_chmod = chmod(server_addr.sun_path, 0777);
+  if (e_chmod != 0) {
+    return OS_SOCKET_ERROR("Failed to chmod the socket file");
+  }
+
+  // TODO: magic constant
+  int e_listen = listen(sock, 8192);
+  if (e_listen != 0) {
+    return OS_SOCKET_ERROR("Failed to listen on a socket");
+  }
+
+#if TD_PORT_POSIX
+  auto impl = make_unique<detail::ServerSocketFdImpl>(std::move(fd));
+#endif
+
+  return ServerSocketFd(std::move(impl));
 }
 
 }  // namespace td
